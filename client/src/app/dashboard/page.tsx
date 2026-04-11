@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "@/lib/api";
 
-export default function StudentDashboard() {
+function DashboardContent() {
   const router = useRouter();
 
   const [profile, setProfile] = useState<any>(null);
@@ -554,4 +554,13 @@ export default function StudentDashboard() {
     </div>
   );
 }
+
+export default function StudentDashboard() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white font-black uppercase tracking-[0.3em] bg-[#050505]">Loading Operational Hub...</div>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
 
