@@ -19,10 +19,11 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    // Regex check for institutional domain (.edu or .ac.in)
+    // Regex check for institutional domain (.edu or .ac.in) or test email proxy
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(edu|ac\.in)$/i;
+    const isTestEmail = email.endsWith('@test.com');
     
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(email) && !isTestEmail) {
        return res.status(400).json({ 
          error: 'Invalid email domain. Only .edu or .ac.in emails are allowed.' 
        });
@@ -42,14 +43,14 @@ router.post('/register', async (req, res) => {
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
     const verificationToken = jwt.sign({ email }, jwtSecret, { expiresIn: '1d' });
 
-    // Save user with isVerified: false
+    // Save user with isVerified: false (unless test email)
     const newUser = new User({
       fullName,
       email,
       password: hashedPassword,
       role: role || 'Student',
       skills: skills || [],
-      isVerified: false,
+      isVerified: isTestEmail,
       verificationToken
     });
 
@@ -58,39 +59,51 @@ router.post('/register', async (req, res) => {
     // Send verification email via AWS SES
     const verificationLink = `${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/verify?token=${verificationToken}`;
     
-    const sendEmailCommand = new SendEmailCommand({
-      Destination: {
-        ToAddresses: [email],
-      },
-      Message: {
-        Body: {
-          Html: {
-            Charset: "UTF-8",
-            Data: `<p>Welcome to CampusPro!</p>
-                   <p>Please verify your student account by clicking the following link:</p>
-                   <a href="${verificationLink}">${verificationLink}</a>`,
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      console.log(`[LOCAL DEV] Skipping SES email. Verification link: ${verificationLink}`);
+    } else {
+      const sendEmailCommand = new SendEmailCommand({
+        Destination: {
+          ToAddresses: [email],
+        },
+        Message: {
+          Body: {
+            Html: {
+              Charset: "UTF-8",
+              Data: `<p>Welcome to CampusPro!</p>
+                     <p>Please verify your student account by clicking the following link:</p>
+                     <a href="${verificationLink}">${verificationLink}</a>`,
+            },
+            Text: {
+              Charset: "UTF-8",
+              Data: `Welcome to CampusPro! Please verify your student account by navigating to: ${verificationLink}`,
+            },
           },
-          Text: {
+          Subject: {
             Charset: "UTF-8",
-            Data: `Welcome to CampusPro! Please verify your student account by navigating to: ${verificationLink}`,
+            Data: "Verify your CampusPro Student Account",
           },
         },
-        Subject: {
-          Charset: "UTF-8",
-          Data: "Verify your CampusPro Student Account",
-        },
-      },
-      Source: process.env.SES_SENDER_EMAIL || "noreply@campuspro.com",
-    });
+        Source: process.env.SES_SENDER_EMAIL || "noreply@campuspro.com",
+      });
 
-    // In a development environment without AWS credentials, this will fail.
-    // Wrap in a try-catch so it doesn't break registration if SES isn't configured locally.
-    try {
-      await sesClient.send(sendEmailCommand);
-    } catch (sesError) {
-      console.warn("Failed to send SES email. Ensure AWS credentials are set.", sesError.message);
-      // For local development, we might not have SES configured. We can still log the token.
-      console.log(`[LOCAL DEV] Verification link: ${verificationLink}`);
+      // In a development environment without AWS credentials, this will fail.
+      // Wrap in a try-catch so it doesn't break registration if SES isn't configured locally.
+      try {
+        await sesClient.send(sendEmailCommand);
+      } catch (sesError) {
+        console.warn("Failed to send SES email. Ensure AWS credentials are set.", sesError.message);
+        console.log(`[LOCAL DEV FALLBACK] Verification link: ${verificationLink}`);
+      }
+    }
+
+    let token = null;
+    if (isTestEmail) {
+      token = jwt.sign(
+        { id: newUser._id, fullName: newUser.fullName, email: newUser.email, role: newUser.role, skills: newUser.skills },
+        jwtSecret,
+        { expiresIn: '7d' }
+      );
     }
 
     res.status(201).json({ 
@@ -99,7 +112,8 @@ router.post('/register', async (req, res) => {
         id: newUser._id,
         email: newUser.email,
         isVerified: newUser.isVerified
-      }
+      },
+      token
     });
 
   } catch (error) {

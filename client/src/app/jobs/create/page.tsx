@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { API_BASE_URL } from "@/lib/api";
 
 type Milestone = {
   title: string;
@@ -67,7 +68,7 @@ export default function CreateJobPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/jobs/create", {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,7 +104,7 @@ export default function CreateJobPage() {
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-900 bg-white"
                 placeholder="e.g., Build a Mobile App Prototype"
               />
             </div>
@@ -114,7 +115,7 @@ export default function CreateJobPage() {
                 value={formData.description}
                 onChange={handleInputChange}
                 rows={5}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-900 bg-white"
                 placeholder="Describe the project goals, requirements, and deliverables..."
               />
             </div>
@@ -167,20 +168,20 @@ export default function CreateJobPage() {
                       placeholder="Title (e.g., Design Phase)"
                       value={tempMilestone.title}
                       onChange={(e) => setTempMilestone({ ...tempMilestone, title: e.target.value })}
-                      className="px-4 py-2 rounded-lg border border-slate-200 outline-none"
+                      className="px-4 py-2 rounded-lg border border-slate-200 outline-none text-slate-900 bg-white"
                     />
                     <input
                       type="date"
                       value={tempMilestone.date}
                       onChange={(e) => setTempMilestone({ ...tempMilestone, date: e.target.value })}
-                      className="px-4 py-2 rounded-lg border border-slate-200 outline-none"
+                      className="px-4 py-2 rounded-lg border border-slate-200 outline-none text-slate-900 bg-white"
                     />
                     <input
                       type="number"
                       placeholder="Amount ($)"
                       value={tempMilestone.amount || ""}
                       onChange={(e) => setTempMilestone({ ...tempMilestone, amount: Number(e.target.value) })}
-                      className="px-4 py-2 rounded-lg border border-slate-200 outline-none"
+                      className="px-4 py-2 rounded-lg border border-slate-200 outline-none text-slate-900 bg-white"
                     />
                   </div>
                   <button
@@ -215,7 +216,7 @@ export default function CreateJobPage() {
                   name="requestedSkill"
                   value={formData.requestedSkill}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-900 bg-white"
                   placeholder="e.g., Python, Graphic Design, etc."
                 />
               </div>

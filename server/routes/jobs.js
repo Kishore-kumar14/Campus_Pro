@@ -109,6 +109,18 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Fetch my jobs (Client specific)
+router.get('/my-jobs', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const jobs = await Job.find({ postedBy: userId }).sort({ createdAt: -1 }).lean();
+    res.json(jobs);
+  } catch (error) {
+    console.error('Fetch My Jobs Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // Fetch a single job by ID
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -125,39 +137,55 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // Submit a bid for a job
 router.post('/:id/bid', authMiddleware, async (req, res) => {
+  console.log('Incoming Bid:', req.body);
   try {
-    const { amount, proposal } = req.body;
-    const userId = req.user.id || req.user._id;
+    const { bidAmount, pitchText } = req.body;
+    const userId = req.user?.id || req.user?._id;
 
-    if (!req.user.isVerified) {
-      return res.status(403).json({ error: 'Please verify your institutional email before bidding.' });
+    if (!userId) {
+      console.log('Bidding Failed: Unauthorized or malformed token');
+      return res.status(401).json({ error: 'Identity Matrix Desynced. Please re-authenticate.' });
     }
 
-    if (!amount || !proposal) {
-      return res.status(400).json({ error: 'Amount and proposal text are required.' });
+    // Validation: Ensure parameters are present
+    if (bidAmount === undefined || bidAmount === null || !pitchText || pitchText.trim() === '') {
+      console.log('Bidding Validation Failed: Missing bidAmount or pitchText', { bidAmount, pitchText });
+      return res.status(400).json({ error: 'Payload Incomplete: bidAmount and pitchText are required.' });
+    }
+
+    const amountNum = Number(bidAmount);
+    if (isNaN(amountNum)) {
+       return res.status(400).json({ error: 'Validation Error: bidAmount must be a numeric vector.' });
+    }
+
+    // Validate Job ID format before querying
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid Project Reference: Hash mismatch.' });
     }
 
     const job = await Job.findById(req.params.id);
     if (!job) {
-      return res.status(404).json({ error: 'Job not found.' });
+      return res.status(404).json({ error: 'Target project not found in the vault.' });
     }
 
     // Validation: Ensure bidder is not the owner
     if (job.postedBy.toString() === userId.toString()) {
-      return res.status(400).json({ error: 'You cannot bid on your own job.' });
+      console.log('Bidding Validation Failed: Self-bidding detected', { userId, posterId: job.postedBy });
+      return res.status(400).json({ error: 'Security Protocol: You cannot bid on your own project injection.' });
     }
 
     // Check if user already bid
     const existingBid = await Bid.findOne({ jobId: job._id, bidderId: userId });
     if (existingBid) {
-      return res.status(400).json({ error: 'You have already submitted a proposal for this job.' });
+      console.log('Bidding Validation Failed: Duplicate bid', { userId, jobId: job._id });
+      return res.status(400).json({ error: 'Transmission Sync Error: A proposal already exists for this project.' });
     }
 
     const newBid = new Bid({
       jobId: job._id,
       bidderId: userId,
-      amount,
-      proposal,
+      amount: amountNum,
+      proposal: pitchText,
     });
 
     await newBid.save();
@@ -165,12 +193,94 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     res.status(201).json({ message: 'Proposal submitted successfully.', bidId: newBid._id });
   } catch (error) {
     console.error('Bidding Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    res.status(500).json({ error: 'Internal server error during handshake.' });
   }
 });
 
+
+// Fetch all proposals for a client's projects (Aggregated Stream)
+router.get('/proposals/client', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const myJobs = await Job.find({ postedBy: userId });
+    const jobIds = myJobs.map(job => job._id);
+
+    const proposals = await Bid.find({ jobId: { $in: jobIds } })
+      .populate('jobId', 'title budget jobType status')
+      .populate('bidderId', 'fullName skills email')
+      .sort({ createdAt: -1 });
+
+    res.json(proposals);
+  } catch (error) {
+    console.error('Client Proposal Fetch Error:', error);
+    res.status(500).json({ error: 'Failed to synchronize aggregated proposal stream.' });
+  }
+});
+
+// Unified Proposal Submission Route
+router.post('/proposals', authMiddleware, async (req, res) => {
+  console.log('Incoming Proposal Handshake:', req.body);
+  try {
+    const { jobId, bidAmount, pitchText } = req.body;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) return res.status(401).json({ error: 'Identity Matrix Desynced.' });
+
+    if (!jobId || bidAmount === undefined || !pitchText) {
+      return res.status(400).json({ error: 'Payload Incomplete: jobId, bidAmount, and pitchText required.' });
+    }
+
+    const job = await Job.findById(jobId);
+    if (!job) return res.status(404).json({ error: 'Target project not found.' });
+
+    if (job.postedBy.toString() === userId.toString()) {
+      return res.status(400).json({ error: 'Security Protocol: Self-bidding restricted.' });
+    }
+
+    const existingBid = await Bid.findOne({ jobId, bidderId: userId });
+    if (existingBid) {
+      return res.status(400).json({ error: 'Transmission Sync: Proposal already exists.' });
+    }
+
+    const newBid = new Bid({
+      jobId,
+      bidderId: userId,
+      amount: Number(bidAmount),
+      proposal: pitchText,
+    });
+
+    await newBid.save();
+    res.status(201).json({ message: 'Proposal successfully committed to the vault.', bidId: newBid._id });
+  } catch (error) {
+    console.error('Proposal Error:', error);
+    res.status(500).json({ error: 'Internal server failure during handshake.' });
+  }
+});
+
+// Fetch proposals for the student (My Projections)
+router.get('/proposals/my-proposals', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    console.log('Fetching Proposals for Student ID:', userId);
+
+    const bids = await Bid.find({ bidderId: userId })
+      .populate({
+
+        path: 'jobId',
+        populate: { path: 'postedBy', select: 'fullName' }
+      })
+      .sort({ createdAt: -1 });
+    res.json(bids);
+  } catch (error) {
+    console.error('Fetch My Proposals Error:', error);
+    res.status(500).json({ error: 'Failed to synchronize student proposal projection.' });
+  }
+});
+
+
 // Update job and payment status (Escrow Simulation)
 router.patch('/:id/status', authMiddleware, async (req, res) => {
+
   try {
     const { status, paymentStatus } = req.body;
     const userId = req.user.id || req.user._id;
@@ -196,4 +306,103 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
   }
 });
 
+// Delete a project (With Security Validation)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Job not found.' });
+
+    const userId = req.user.id || req.user._id;
+    // Authorization: Must be the author
+    if (job.postedBy.toString() !== userId.toString()) {
+      return res.status(403).json({ error: 'Unauthorized. You did not author this project.' });
+    }
+
+    await Job.findByIdAndDelete(req.params.id);
+    await Bid.deleteMany({ jobId: req.params.id });
+
+    res.json({ message: 'Project and all associated proposals have been withdrawn.' });
+  } catch (error) {
+    console.error('Delete Job Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Fetch all bids for a specific job (Only for the job owner)
+router.get('/:id/bids', authMiddleware, async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id);
+    if (!job) return res.status(404).json({ error: 'Job not found.' });
+
+    const userId = req.user.id || req.user._id;
+    if (job.postedBy.toString() !== userId.toString()) {
+      return res.status(403).json({ error: 'Unauthorized. You are not the owner of this project.' });
+    }
+
+    const bids = await Bid.find({ jobId: req.params.id })
+      .populate('bidderId', 'fullName email skills')
+      .sort({ createdAt: -1 });
+    
+    res.json(bids);
+  } catch (error) {
+    console.error('Fetch Bids Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Accept a bid
+router.post('/bids/:id/accept', authMiddleware, async (req, res) => {
+  try {
+    const bidId = req.params.id;
+    const bid = await Bid.findById(bidId);
+    if (!bid) return res.status(404).json({ error: 'Proposal not found.' });
+
+    const job = await Job.findById(bid.jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found.' });
+
+    const userId = req.user.id || req.user._id;
+    if (job.postedBy.toString() !== userId.toString()) {
+      return res.status(403).json({ error: 'Unauthorized to accept this proposal.' });
+    }
+
+    // Update Bid status
+    bid.status = 'Accepted';
+    await bid.save();
+
+    // Reject all other bids for this job
+    await Bid.updateMany(
+      { jobId: job._id, _id: { $ne: bidId } },
+      { $set: { status: 'Rejected' } }
+    );
+
+    // Update Job status and assigned student
+    job.status = 'In Progress';
+    job.assignedTo = bid.bidderId;
+    await job.save();
+
+    res.json({ message: 'Proposal accepted and project started.', job });
+  } catch (error) {
+    console.error('Accept Bid Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Fetch my bids (Student specific)
+router.get('/my-bids', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id;
+    const bids = await Bid.find({ bidderId: userId })
+      .populate({
+        path: 'jobId',
+        populate: { path: 'postedBy', select: 'fullName' }
+      })
+      .sort({ createdAt: -1 });
+    res.json(bids);
+  } catch (error) {
+    console.error('Fetch My Bids Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
+

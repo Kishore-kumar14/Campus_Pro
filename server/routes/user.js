@@ -1,5 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
+const Job = require('../models/Job');
+const Bid = require('../models/Bid');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -44,7 +46,20 @@ router.get('/profile/portfolio', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    res.json({ user });
+    let postedJobs = [];
+    let receivedBids = 0;
+    let activeBids = 0;
+
+    if (user.role === 'Client') {
+      postedJobs = await Job.find({ postedBy: userId }).sort({ createdAt: -1 });
+      const jobIds = postedJobs.map(j => j._id);
+      receivedBids = await Bid.countDocuments({ jobId: { $in: jobIds } });
+    } else {
+      // For Students: count their active proposals
+      activeBids = await Bid.countDocuments({ bidderId: userId });
+    }
+
+    res.json({ user, postedJobs, receivedBids, activeBids });
   } catch (error) {
     console.error('Portfolio Error:', error);
     res.status(500).json({ error: 'Internal server error.' });

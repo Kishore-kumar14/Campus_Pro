@@ -56,6 +56,12 @@ export default function RivieraLandingPage() {
             >
               Explore Opportunities
             </Link>
+            <Link 
+              href="/dashboard" 
+              className="w-full sm:w-auto px-12 py-6 bg-cyan-400 text-[#050505] font-black text-xl rounded-3xl border border-cyan-400/20 hover:bg-white transition-all duration-500 shadow-[0_0_30px_rgba(0,242,255,0.3)]"
+            >
+              Launch Dashboard
+            </Link>
           </div>
         </div>
       </section>

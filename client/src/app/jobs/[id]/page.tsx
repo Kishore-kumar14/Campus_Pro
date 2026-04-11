@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import InitializeLink from "@/components/InitializeLink";
+import { API_BASE_URL } from "@/lib/api";
+
 
 export default function JobDetailsPage() {
   const { id } = useParams();
@@ -11,13 +14,9 @@ export default function JobDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Modal & Bidding States
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [bidAmount, setBidAmount] = useState<number | string>("");
-  const [proposal, setProposal] = useState("");
-  const [isBidding, setIsBidding] = useState(false);
-  const [bidSuccess, setBidSuccess] = useState(false);
-  const [bidError, setBidError] = useState<string | null>(null);
+
 
   // Escrow States
   const [isSecureFlow, setIsSecureFlow] = useState(false);
@@ -28,78 +27,47 @@ export default function JobDetailsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    fetchJobDetails();
-    const token = localStorage.getItem("token");
-    if (token) {
-      // Mocking verification context since JWT decode isn't on frontend yet
-      setCurrentUser({ id: "current-user-id", isVerified: true }); 
-    }
+    const fetchUserAndJobDetails = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        
+        // 1. Resolve exact User logic (Fixing the mock context)
+        if (token) {
+          const userRes = await fetch(`${API_BASE_URL}/api/user/profile/portfolio`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            userData.user.isVerified = true; // Force isVerified to always be true at the component layer
+            setCurrentUser(userData.user);
+          }
+        }
+
+        // 2. Fetch Job target
+        const response = await fetch(`${API_BASE_URL}/api/jobs/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error("Target project not found in database.");
+        const data = await response.json();
+        setJob(data);
+      } catch (err: any) {
+
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserAndJobDetails();
   }, [id]);
 
-  const fetchJobDetails = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/jobs/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error("Target project not found in database.");
-      const data = await response.json();
-      setJob(data);
-      setBidAmount(data.budget || 0);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleBidSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBidError(null);
-    
-    // Validation
-    const amountNum = Number(bidAmount);
-    if (!amountNum || amountNum <= 0) {
-      setBidError("Your bid must be greater than $0.");
-      return;
-    }
-    if (!proposal.trim()) {
-      setBidError("A proposal pitch is required to synchronize.");
-      return;
-    }
-
-    setIsBidding(true);
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/jobs/${id}/bid`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({ amount: amountNum, proposal }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Bidding process failed.");
-
-      setBidSuccess(true);
-      setTimeout(() => {
-        setIsModalOpen(false);
-        setIsSecureFlow(true); // Trigger Escrow Layer
-      }, 1500);
-    } catch (err: any) {
-      setBidError(err.message);
-    } finally {
-      setIsBidding(false);
-    }
-  };
 
   const handleEscrowSimulate = async () => {
     setIsEscrowLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:5000/api/jobs/${id}/status`, {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${id}/status`, {
         method: "PATCH",
         headers: { 
           "Content-Type": "application/json",
@@ -124,7 +92,8 @@ export default function JobDetailsPage() {
   if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-cyan-400 font-black tracking-widest uppercase">Initializing Layer...</div>;
   if (error || !job) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-red-500 font-bold uppercase tracking-[0.2em]">{error || "404 - Job Vault Null"}</div>;
 
-  const canBid = currentUser?.isVerified && job.postedBy?._id !== currentUser?.id && job.status === "Open";
+  // Verification check permanently removed
+  const canBid = job.postedBy?._id !== currentUser?._id && job.status === "Open" && currentUser?.role !== "Client";
 
   return (
     <div className="min-h-screen bg-[#050505] py-24 px-6 relative overflow-hidden font-sans">
@@ -240,11 +209,14 @@ export default function JobDetailsPage() {
 
             {!isSecureFlow && (
                <button 
-                 onClick={() => setIsModalOpen(true)}
+                 onClick={() => {
+                    if (currentUser?.role === 'Client') return;
+                    setIsModalOpen(true);
+                 }}
                  disabled={!canBid}
                  className="w-full md:w-auto px-16 py-6 bg-cyan-400 text-[#050505] font-black rounded-[2.5rem] shadow-[0_0_30px_rgba(34,211,238,0.4)] animate-pulse-neon hover:bg-cyan-300 transition-all active:scale-95 uppercase tracking-widest text-xs disabled:opacity-30 disabled:pointer-events-none"
                >
-                 {job.status !== "Open" ? "Vault Closed" : "Submit Proposal"}
+                 {currentUser?.role === 'Client' ? "Clients Cannot Bid" : job.status !== "Open" ? "Vault Closed" : "Submit Proposal"}
                </button>
             )}
           </div>
@@ -260,71 +232,15 @@ export default function JobDetailsPage() {
             
             <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/20 blur-[100px] rounded-full"></div>
             
-            {bidSuccess ? (
-              <div className="text-center py-20 relative z-10">
-                 <div className="w-32 h-32 bg-cyan-400/20 text-cyan-400 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_30px_rgba(0,242,255,0.5)] border border-cyan-400/50">
-                    <svg className="w-16 h-16 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
-                 </div>
-                 <h2 className="text-5xl font-black text-white mb-4 tracking-tighter">Proposal Dispatched</h2>
-                 <p className="text-cyan-400/80 font-black uppercase tracking-[0.2em] text-[10px]">Awaiting Recruiter Acceptance Matrix...</p>
-              </div>
-            ) : (
-              <div className="relative z-10">
-                <h2 className="text-4xl lg:text-5xl font-black text-white mb-3 tracking-tighter">Initialize Link</h2>
-                <p className="text-white/40 mb-12 font-bold uppercase tracking-widest text-[9px] leading-loose">State your terms and outline your strategic execution plan to the client.</p>
-
-                <form className="space-y-10" onSubmit={handleBidSubmit}>
-                  
-                  <div className="group">
-                    <label className="block text-[9px] font-black text-neon-purple mb-2 uppercase tracking-[0.2em] ml-1 transition-colors group-focus-within:text-cyan-400">Bid Vector ($)</label>
-                    <input 
-                      type="number"
-                      value={bidAmount}
-                      onChange={(e) => setBidAmount(e.target.value)}
-                      className="w-full px-6 py-4 bg-white/5 backdrop-blur-md rounded-t-xl border-b-2 border-white/20 text-white font-black text-2xl focus:border-cyan-400 focus:shadow-[0_4px_15px_-4px_rgba(0,242,255,0.4)] outline-none transition-all placeholder:text-white/10"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="group">
-                    <label className="block text-[9px] font-black text-neon-purple mb-2 uppercase tracking-[0.2em] ml-1 transition-colors group-focus-within:text-cyan-400">Strategic Pitch</label>
-                    <textarea 
-                      rows={5}
-                      value={proposal}
-                      onChange={(e) => setProposal(e.target.value)}
-                      className="w-full px-6 py-4 bg-white/5 backdrop-blur-md rounded-t-xl border-b-2 border-white/20 text-white font-medium text-lg leading-relaxed focus:border-cyan-400 focus:shadow-[0_4px_15px_-4px_rgba(0,242,255,0.4)] outline-none transition-all placeholder:text-white/10 resize-none"
-                      placeholder="Outline tools, frameworks, and timeline..."
-                    />
-                  </div>
-
-                  {bidError && (
-                     <div className="p-6 bg-red-400/10 border border-red-400/30 text-red-400 font-bold text-[10px] uppercase tracking-widest rounded-2xl animate-pulse">
-                        {bidError}
-                     </div>
-                  )}
-
-                  <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-white/10">
-                    <button 
-                      type="button" 
-                      onClick={() => setIsModalOpen(false)}
-                      className="w-full sm:w-1/3 py-6 rounded-3xl text-white/40 font-black uppercase tracking-widest text-xs hover:bg-white/5 transition-all border-2 border-transparent"
-                    >
-                      Abort
-                    </button>
-                    <button 
-                      type="submit"
-                      disabled={isBidding}
-                      className="w-full sm:w-2/3 py-6 bg-cyan-400 text-[#050505] font-black uppercase tracking-[0.2em] text-xs rounded-[2rem] shadow-[0_0_30px_rgba(34,211,238,0.4)] hover:bg-cyan-300 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center border-none"
-                    >
-                      {isBidding ? "Transmitting..." : "Send Proposal"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
+            <InitializeLink 
+              jobId={job._id}
+              initialBudget={job.budget}
+              onClose={() => setIsModalOpen(false)}
+            />
           </div>
         </div>
       )}
     </div>
   );
 }
+

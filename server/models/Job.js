@@ -14,6 +14,7 @@ const jobSchema = new mongoose.Schema({
     required: true 
   },
   budget: { type: Number, default: 0 },
+  category: { type: String },
   milestones: [milestoneSchema],
   requestedSkill: { type: String },
   postedBy: { 
@@ -31,6 +32,10 @@ const jobSchema = new mongoose.Schema({
     type: String,
     enum: ['Unpaid', 'Funds Held', 'Released'],
     default: 'Unpaid'
+  },
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 });
 

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -24,15 +27,16 @@ export default function RegisterPage() {
     setError(null);
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(edu|ac\.in)$/i;
-    if (!emailRegex.test(formData.email)) {
-      setError("Institutional email requirement: You must use a valid .edu or .ac.in address.");
+    const isTestEmail = formData.email.endsWith('@test.com');
+    if (!emailRegex.test(formData.email) && !isTestEmail) {
+      setError("Institutional email requirement: You must use a valid .edu or .ac.in address or @test.com.");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/register", {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -46,9 +50,29 @@ export default function RegisterPage() {
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
         throw new Error(data.error || "Registration failed");
+      }
+
+      if (data.user?.isVerified && data.token) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("fullName", formData.fullName);
+        
+        setTimeout(() => {
+          try {
+            if (router) {
+              router.push("/dashboard");
+            } else {
+              window.location.href = "/dashboard";
+            }
+          } catch (err) {
+            window.location.href = "/dashboard";
+          }
+        }, 500);
+        
+        return;
       }
 
       setIsSuccess(true);

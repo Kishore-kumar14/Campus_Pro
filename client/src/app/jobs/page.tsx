@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { API_BASE_URL } from "@/lib/api";
 
 export default function JobsMarketplace() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -26,8 +27,8 @@ export default function JobsMarketplace() {
 
       // Fetch Jobs and User Profile concurrently for precise frontend matching
       const [jobsRes, profileRes] = await Promise.all([
-        fetch("http://localhost:5000/api/jobs", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("http://localhost:5000/api/user/profile/portfolio", { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}/api/jobs`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/api/user/profile/portfolio`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       if (!jobsRes.ok) {
@@ -72,7 +73,7 @@ export default function JobsMarketplace() {
 
   // Process filters and calculate scores
   const processedJobs = jobs
-    .filter(job => filterType === "All" || job.title.toLowerCase().includes(filterType.toLowerCase()))
+    .filter(job => filterType === "All" || (job.category && job.category === filterType))
     .filter(job => !searchQuery || job.title.toLowerCase().includes(searchQuery.toLowerCase()) || job.description.toLowerCase().includes(searchQuery.toLowerCase()))
     .map(job => ({ ...job, frontendMatchScore: calculateMatchScore(job, userProfile?.skills) }))
     .sort((a, b) => b.frontendMatchScore - a.frontendMatchScore);
@@ -87,6 +88,14 @@ export default function JobsMarketplace() {
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
+        
+        {/* Navigation / Back Link */}
+        <div className="flex justify-start mb-12">
+           <Link href="/dashboard" className="group flex items-center space-x-3 text-cyan-400 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-colors">
+              <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+              <span>Return to Command Center</span>
+           </Link>
+        </div>
         
         {/* Header & The Search Hub */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-16 gap-10">
@@ -187,14 +196,16 @@ export default function JobsMarketplace() {
                   </div>
                   
                   {/* EMERALD MATCH BADGE */}
-                  <div className={`px-5 py-2.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] border transition-all duration-700 whitespace-nowrap ${
-                    job.frontendMatchScore >= 75 
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.3)]" 
-                      : "bg-white/5 text-white/30 border-white/10"
-                  }`}>
-                    {job.frontendMatchScore >= 75 && <span className="mr-1 inline-block animate-pulse">⚡</span>}
-                    {job.frontendMatchScore}% Match
-                  </div>
+                  {userProfile?.role !== 'Client' && (
+                    <div className={`px-5 py-2.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] border transition-all duration-700 whitespace-nowrap ${
+                      job.frontendMatchScore >= 75 
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.3)]" 
+                        : "bg-white/5 text-white/30 border-white/10"
+                    }`}>
+                      {job.frontendMatchScore >= 75 && <span className="mr-1 inline-block animate-pulse">⚡</span>}
+                      {job.frontendMatchScore}% Match
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-white/40 font-bold mb-10 line-clamp-3 leading-loose text-sm h-20">
@@ -217,7 +228,7 @@ export default function JobsMarketplace() {
                   
                   {/* GRADIENT ACTION BUTTON */}
                   <Link href={`/jobs/${job._id}`} className="px-8 py-5 bg-gradient-to-r from-purple-600 to-blue-500 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.3em] text-white shadow-[0_10px_30px_-5px_rgba(168,85,247,0.4)] hover:shadow-[0_10px_40px_-5px_rgba(59,130,246,0.6)] transition-all active:scale-95 group-hover:scale-105">
-                    View Matrix
+                    {userProfile?.role === 'Client' ? "Review Proposals" : "View Matrix"}
                   </Link>
                 </div>
               </div>
