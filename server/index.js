@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
+const connectDB = require("./config/db");
 const cors = require("cors");
 
 const app = express();
@@ -12,13 +12,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// MongoDB connection
-// Inside Docker, the 'host' name is 'mongodb' (matching the service name in docker-compose)
-const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://mongodb:27017/campuspro';
-
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('🚀 Riviera Vault: Database Connected'))
-  .catch(err => console.error('❌ Database Connection Error:', err));
+// Database connection
+connectDB();
 
 // Routes
 const authRoutes = require("./routes/auth");

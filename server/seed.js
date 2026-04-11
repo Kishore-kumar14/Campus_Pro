@@ -1,14 +1,11 @@
-const mongoose = require('mongoose');
+const connectDB = require('./config/db');
 const Job = require('./models/Job');
 const User = require('./models/User');
 require('dotenv').config();
 
-const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://mongodb:27017/campuspro';
-
 const seedJobs = async () => {
   try {
-    await mongoose.connect(MONGO_URI);
-    console.log('Connected to database');
+    await connectDB();
 
     // Create or find a test user to act as the job poster
     let user = await User.findOne({});

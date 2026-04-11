@@ -1,26 +1,12 @@
 version: "3.8"
 services:
-  mongodb:
-    image: mongo:latest
-    container_name: campuspro_db
-    ports:
-      - "27017:27017" # Standard MongoDB port
-    volumes:
-      - campuspro_data:/data/db # This saves your users even if Docker restarts
-
   server:
     build: ./server
     container_name: campuspro-server
     ports:
       - "5000:5000"
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017/campuspro
-      - PORT=5000
-    depends_on:
-      - mongodb
+    env_file:
+      - ./server/.env
     volumes:
       - ./server:/usr/src/app
       - /usr/src/app/node_modules
-
-volumes:
-  campuspro_data:
