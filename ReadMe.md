@@ -13,11 +13,11 @@ CampusPro is a secure, university-verified marketplace designed specifically for
 
 ##  Key Features
 
-- ** Smart Skill Matching**: Algorithm-driven matching of listed skills with project requirements.
-- ** Verified Identity**: Secure institutional verification to ensure a trusted peer-to-peer community.
-- ** Secure Escrow**: Transactional state management ensuring project stability and payment security.
-- ** Dynamic Dashboard**: A premium, glassmorphic interface for tracking bids, project progress, and earnings.
-- ** Integrated Marketplace**: Browse and apply for campus-verified job opportunities in real-time.
+- **Smart Skill Matching**: Algorithm-driven matching of listed skills with project requirements.
+- **Verified Identity**: Secure institutional verification to ensure a trusted peer-to-peer community.
+- **Secure Escrow**: Transactional state management ensuring project stability and payment security.
+- **Dynamic Dashboard**: A premium, glassmorphic interface for tracking bids, project progress, and earnings.
+- **Integrated Marketplace**: Browse and apply for campus-verified job opportunities in real-time.
 
 ---
 
@@ -129,7 +129,4 @@ Contributions are welcome! Please follow these steps:
 4. Push to the Branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
----
 
-##  License
-This project is licensed under the MIT License.
